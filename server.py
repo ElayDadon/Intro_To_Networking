@@ -1,57 +1,94 @@
 import socket
 import threading
 import time
-from time import sleep
-
+import struct
+import ipaddress
+import netifaces as ni
 
 # Set the broadcast address and port
-broadcast_address = '172.20.10.15' # this is the broadcast ip address on my iphone, it will need to change on another network
+broadcast_address = 0  # Change this to the appropriate broadcast address
+server_address = 0
 broadcast_port = 13117
+
 
 # Global variables
 UDP_PORT = 13117
-TCP_PORT = 0  # Will be assigned dynamically
-MAX_CLIENTS = 3
 ANSWER_TIMEOUT = 10  # Timeout for receiving answers in seconds
-
-# Define a list of trivia questions
-# You can replace these with your own set of questions
-TRIVIA_QUESTIONS = [
-    {
-        "question": "Question 1: [Your question here]",
-        "answer": True
-    },
-    {
-        "question": "Question 2: [Your question here]",
-        "answer": False
-    },
-    # Add more questions as needed
-]
+MAGIC_COOKIE = b'\xab\xcd\xdc\xba'
+MESSAGE_TYPE = 2
 
 # Define a list to hold connected clients
 clients = []
 client_lock = threading.Lock()
 
+# Define a dictionary to hold the global variable
+global_vars = {"TCP_PORT": 0}  # will be assigned later
 
 
-# Function to handle UDP broadcast
+def set_tcp_port(port):
+    # Modify the value inside the dictionary
+    global_vars["TCP_PORT"] = port
+
+
+def get_tcp_port():
+    return global_vars["TCP_PORT"]
+
+
 # Function to handle UDP broadcast
 def udp_broadcast(server_name):
     try:
         # Create a UDP socket
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
         while True:
+            # Pack the server name and port into the offer message
+            offer_message = struct.pack('!4sB32sH', MAGIC_COOKIE, MESSAGE_TYPE, server_name.encode('utf-8').ljust(32),
+                                        get_tcp_port())
+
             # Broadcast offer message
-            offer_message = b'\xab\xcd\xdc\xba\x02' + server_name.ljust(32).encode('utf-8') + \
-                            TCP_PORT.to_bytes(2, byteorder='big')
-            udp_socket.sendto(offer_message, ('<broadcast>', UDP_PORT))
+            udp_socket.sendto(offer_message, (broadcast_address, UDP_PORT))
             time.sleep(1)  # Broadcast every second
 
     except Exception as e:
         print("Error in UDP broadcast:", e)
+
+
+# function to handle getting the broadcast address
+def get_server_ip():
+    global server_address
+    hostname = socket.gethostname()  # Get the host name of the machine
+    ip_address = socket.gethostbyname(hostname)  # Get the IP address associated with the hostname
+    server_address = str(ip_address)
+
+
+def get_ip_address():
+    hostname = socket.gethostname()
+    ip_address = socket.gethostbyname(hostname)
+    return ip_address
+
+
+def get_network_mask():
+    interfaces = ni.interfaces()
+    for i in interfaces:
+        try:
+            ip = ni.ifaddresses(i)[ni.AF_INET][0]['addr']
+            netmask = ni.ifaddresses(i)[ni.AF_INET][0]['netmask']
+            if ip == get_ip_address():
+                return netmask
+        except KeyError:
+            pass
+    return None
+
+
+def get_broadcast_ip():
+    global broadcast_address
+
+    IP = get_ip_address()
+    MASK = get_network_mask()
+    net = ipaddress.IPv4Network(IP + '/' + MASK, False)
+    broadcast_address = str(net.broadcast_address)
 
 
 # Function to handle TCP connections from clients
@@ -59,6 +96,7 @@ def handle_client(client_socket, client_address):
     try:
         # Receive player name from client
         player_name = client_socket.recv(1024).decode('utf-8').strip()
+        print(player_name)
         with client_lock:
             clients.append((player_name, client_socket))
 
@@ -76,36 +114,32 @@ def handle_client(client_socket, client_address):
 
 # Main function to run the server
 def main():
-    global TCP_PORT
     try:
+        get_broadcast_ip()
+        get_server_ip()
+        print(broadcast_address)
         # Get server name from user input
         server_name = input("Enter server name: ")
-
-        # Start UDP broadcast thread
-        udp_thread = threading.Thread(target=udp_broadcast, args=(server_name,))
-        udp_thread.daemon = True
-        udp_thread.start()
-
-        print("Server started, listening on IP address" + broadcast_address)
-
-        # Wait for a brief period before creating TCP socket
-        time.sleep(2)
 
         # Create a TCP socket
         tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
         # Bind the socket to a port
-        tcp_socket.bind(('0.0.0.0', TCP_PORT))
-
+        tcp_socket.bind(('0.0.0.0', 0))
+        #get the TCP_PORT that was allocated dynamically
+        TCP_PORT = tcp_socket.getsockname()[1]
+        set_tcp_port(TCP_PORT)
         # Listen for incoming connections
-        tcp_socket.listen(MAX_CLIENTS)
+        tcp_socket.listen()
 
         # Get the dynamically assigned TCP port
 
-        TCP_PORT = tcp_socket.getsockname()[1]
+        # Start UDP broadcast thread after TCP port assignment
+        udp_thread = threading.Thread(target=udp_broadcast, args=(server_name,))
+        udp_thread.daemon = True
+        udp_thread.start()
 
-        print("TCP server ready to accept connections on port:", TCP_PORT)
+        print("Server started, listening on IP address", server_address)
 
         # Accept incoming connections and handle clients
         while True:
