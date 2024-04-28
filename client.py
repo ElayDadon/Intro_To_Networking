@@ -4,11 +4,6 @@ import threading
 from typing import Tuple
 
 
-# Function to validate player answers
-def is_valid_key(key: str) -> bool:
-    return key in ['N', 'F', '0', 'Y', 'T', '1']
-
-
 class TriviaClient:
     # Constants defining the network protocol
     MAGIC_COOKIE = b'\xab\xcd\xdc\xba'  # Magic cookie to identify valid packets
@@ -20,6 +15,7 @@ class TriviaClient:
     MSG_LEN_HEADER = 4  # Header length indicating the length of the following message
     TIME_TO_SEND_ANS = 10  # Time allowed for sending an answer
     END_GAME_MSG = "Game over!"  # Message prefix indicating the end of the game
+    KEYS = ['N', 'F', '0', 'Y', 'T', '1']
 
     # Function to wait for a game offer from the server
     def wait_for_offer(self, udp_socket: socket.socket) -> Tuple[str, str, int]:
@@ -89,12 +85,16 @@ class TriviaClient:
         # Get player input for the answer
         key = input("Please enter your answer:")
         # Validate the answer
-        while not is_valid_key(key) and not stop_flag.is_set():
+        while not self.is_valid_key(key) and not stop_flag.is_set():
             print("Invalid answer")
             key = input("Please enter your answer:")
         if not stop_flag.is_set():
             # If the stop flag is not set (the timeout didn't happen), send the answer to the server
             self.tcp_socket.sendall(key.encode())
+
+    # Function to validate player answers
+    def is_valid_key(self, key: str) -> bool:
+        return key in self.KEYS
 
     # Function to start the trivia client loop
     def start(self) -> None:
