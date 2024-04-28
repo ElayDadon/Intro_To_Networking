@@ -3,6 +3,12 @@ import struct
 import threading
 from typing import Tuple
 
+
+# Function to validate player answers
+def is_valid_key(key: str) -> bool:
+    return key in ['N', 'F', '0', 'Y', 'T', '1']
+
+
 class TriviaClient:
     # Constants defining the network protocol
     MAGIC_COOKIE = b'\xab\xcd\xdc\xba'  # Magic cookie to identify valid packets
@@ -14,7 +20,6 @@ class TriviaClient:
     MSG_LEN_HEADER = 4  # Header length indicating the length of the following message
     TIME_TO_SEND_ANS = 10  # Time allowed for sending an answer
     END_GAME_MSG = "Game over!"  # Message prefix indicating the end of the game
-
 
     # Function to wait for a game offer from the server
     def wait_for_offer(self, udp_socket: socket.socket) -> Tuple[str, str, int]:
@@ -36,39 +41,41 @@ class TriviaClient:
 
         return server_name.decode().rstrip(), server_addr[0], server_port
 
-    # Function to connect to the game server over TCP
+    # Function to connect the game server over TCP and updating tcp_socket of client
     def connect_to_server(self, server_ip: str, server_port: int) -> socket.socket:
         tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tcp_socket.connect((server_ip, server_port))
-        return tcp_socket
-
+        self.tcp_socket = tcp_socket
 
     # Function to handle the game
-    def play(self, tcp_socket: socket.socket, player_name: str) -> None:
+    def play(self, player_name: str) -> None:
         # Send player name to the server
-        tcp_socket.sendall(f"{player_name}\n".encode())
+        self.tcp_socket.sendall(f"{player_name}\n".encode())
         # Print game rules
-        print("rules of the game:\n\tIf your answer is TRUE enter: Y / T / 1\n\tIf your answer is FALSE enter: N / F / 0")
+        print("RULES OF THE GAME:\n\tIf your answer is TRUE enter: Y / T / 1\n\t"
+              "If your answer is FALSE enter: N / F / 0\n\t"
+              "IMPORTANT: If you didn't answer on a question, but you're still\n\t\t\t   "
+              "in the game, enter TWO keys - one for the last question (which will not be considered),\n\t\t\t   "
+              "and one for the current")
         while True:
             # Receive message length header
-            msg_len = tcp_socket.recv(self.MSG_LEN_HEADER)
+            msg_len = self.tcp_socket.recv(self.MSG_LEN_HEADER)
             # Receive the message based on the received length
-            msg = tcp_socket.recv(int.from_bytes(msg_len, byteorder='big'))
+            msg = self.tcp_socket.recv(int.from_bytes(msg_len, byteorder='big'))
             print(msg)
             # Check if the game is over
             if msg[:len(self.END_GAME_MSG)] != self.END_GAME_MSG:
                 # If not, process player answer
-                self.process_player_answer(tcp_socket)
+                self.process_player_answer()
             else:
                 break
 
-
     # Function for getting and sending player's answer
-    def process_player_answer(self, tcp_socket):
+    def process_player_answer(self):
         # Event for stopping the answer sending thread
         stop_flag = threading.Event()
         # Thread to send the answer
-        send_key_t = threading.Thread(target=self.send_key, args=(tcp_socket, stop_flag))
+        send_key_t = threading.Thread(target=self.send_key, args=(stop_flag,))
         send_key_t.start()
         try:
             # Wait for TIME_TO_SEND_ANS seconds for the player to enter an answer
@@ -78,20 +85,16 @@ class TriviaClient:
             print("Error while joining thread")
 
     # Function for sending the player's answer
-    def send_key(self, tcp_socket: socket.socket, stop_flag: threading.Event) -> None:
+    def send_key(self, stop_flag: threading.Event) -> None:
         # Get player input for the answer
         key = input("Please enter your answer:")
         # Validate the answer
-        while not self.is_valid_key(key) and not stop_flag.is_set():
+        while not is_valid_key(key) and not stop_flag.is_set():
             print("Invalid answer")
             key = input("Please enter your answer:")
         if not stop_flag.is_set():
             # If the stop flag is not set (the timeout didn't happen), send the answer to the server
-            tcp_socket.sendall(key.encode())
-
-    # Function to validate player answers
-    def is_valid_key(key: str) -> bool:
-        return key in ['N', 'F', '0', 'Y', 'T', '1']
+            self.tcp_socket.sendall(key.encode())
 
     # Function to start the trivia client loop
     def start(self) -> None:
@@ -106,14 +109,14 @@ class TriviaClient:
                     print(f"Received offer from server {server_name} at address {server_ip}, attempting to connect...")
                     try:
                         # Connect to the server
-                        tcp_socket = self.connect_to_server(server_ip, server_tcp_port)
+                        self.connect_to_server(server_ip, server_tcp_port)
                     except (socket.error, socket.timeout) as e:
                         print('Could not connect to server:', str(e))
                         continue
                     try:
                         # Play the game
-                        with tcp_socket:
-                            self.play(tcp_socket, player_name)
+                        with self.tcp_socket:
+                            self.play(player_name)
                             print("Server disconnected, listening for offer requests...")
                     except (socket.error, socket.timeout) as e:
                         print(f"Communication error with the server: {e}")
@@ -124,6 +127,9 @@ class TriviaClient:
                 except InvalidOffer as e:
                     print(e.message)
                     continue
+
+    def __init__(self):
+        self.tcp_socket = None
 
 
 class InvalidOffer(Exception):
