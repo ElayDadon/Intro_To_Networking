@@ -58,7 +58,7 @@ class TriviaClient:
             msg_len = self.tcp_socket.recv(self.MSG_LEN_HEADER)
             # Receive the message based on the received length
             msg = self.tcp_socket.recv(int.from_bytes(msg_len, byteorder='big'))
-            print(msg)
+            print(msg.decode())
             # Check if the game is over
             if msg[:len(self.END_GAME_MSG)] != self.END_GAME_MSG:
                 # If not, process player answer
@@ -99,7 +99,7 @@ class TriviaClient:
     # Function to start the trivia client loop
     def start(self) -> None:
         # Get player name
-        player_name = input("please enter your name")
+        player_name = input("please enter your name:")
         print("Client started, listening for offer requests...")
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
             while True:
