@@ -2,6 +2,7 @@ import socket
 import struct
 import threading
 from typing import Tuple
+from colors import GREEN, LIGHT_GREEN, RED, RESET, BOLD_CYAN
 
 
 class TriviaClient:
@@ -48,11 +49,11 @@ class TriviaClient:
         # Send player name to the server
         self.tcp_socket.sendall(f"{player_name}\n".encode())
         # Print game rules
-        print("RULES OF THE GAME:\n\tIf your answer is TRUE enter: Y / T / 1\n\t"
+        print(BOLD_CYAN + "RULES OF THE GAME:\n\tIf your answer is TRUE enter: Y / T / 1\n\t"
               "If your answer is FALSE enter: N / F / 0\n\t"
               "IMPORTANT: If you didn't answer on a question, but you're still\n\t\t\t   "
               "in the game, enter TWO keys - one for the last question (which will not be considered),\n\t\t\t   "
-              "and one for the current")
+              "and one for the current" + RESET)
         while True:
             # Receive message length header
             msg_len = self.tcp_socket.recv(self.MSG_LEN_HEADER)
@@ -100,7 +101,7 @@ class TriviaClient:
     def start(self) -> None:
         # Get player name
         player_name = input("please enter your name")
-        print("Client started, listening for offer requests...")
+        print(GREEN + "Client started, listening for offer requests..." + RESET)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
             while True:
                 try:
