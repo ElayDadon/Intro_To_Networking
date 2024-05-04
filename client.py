@@ -2,6 +2,7 @@ import socket
 import struct
 import threading
 from typing import Tuple
+import colors
 
 
 class TriviaClient:
@@ -48,17 +49,17 @@ class TriviaClient:
         # Send player name to the server
         self.tcp_socket.sendall(f"{player_name}\n".encode())
         # Print game rules
-        print("RULES OF THE GAME:\n\tIf your answer is TRUE enter: Y / T / 1\n\t"
+        print(colors.BOLD_CYAN + "RULES OF THE GAME:\n\tIf your answer is TRUE enter: Y / T / 1\n\t"
               "If your answer is FALSE enter: N / F / 0\n\t"
               "IMPORTANT: If you didn't answer on a question, but you're still\n\t\t\t   "
               "in the game, enter TWO keys - one for the last question (which will not be considered),\n\t\t\t   "
-              "and one for the current")
+              "and one for the current" + colors.RESET)
         while True:
             # Receive message length header
             msg_len = self.tcp_socket.recv(self.MSG_LEN_HEADER)
             # Receive the message based on the received length
             msg = self.tcp_socket.recv(int.from_bytes(msg_len, byteorder='big'))
-            print(msg.decode())
+            print(colors.Bold_Blue + msg.decode() + colors.RESET)
             # Check if the game is over
             if msg[:len(self.END_GAME_MSG)] != self.END_GAME_MSG:
                 # If not, process player answer
@@ -78,16 +79,16 @@ class TriviaClient:
             send_key_t.join(timeout=self.TIME_TO_SEND_ANS)
             stop_flag.set()
         except threading.ThreadError:
-            print("Error while joining thread")
+            print(colors.RED + "Error while joining thread" + colors.RESET)
 
     # Function for sending the player's answer
     def send_key(self, stop_flag: threading.Event) -> None:
         # Get player input for the answer
-        key = input("Please enter your answer:")
+        key = input(colors.BOLD_CYAN + "Please enter your answer:" + colors.RESET)
         # Validate the answer
         while not self.is_valid_key(key) and not stop_flag.is_set():
             print("Invalid answer")
-            key = input("Please enter your answer:")
+            key = input(colors.BOLD_CYAN + "Please enter your answer:" + colors.RESET)
         if not stop_flag.is_set():
             # If the stop flag is not set (the timeout didn't happen), send the answer to the server
             self.tcp_socket.sendall(key.encode())
@@ -106,26 +107,26 @@ class TriviaClient:
                 try:
                     # Wait for a game offer
                     server_name, server_ip, server_tcp_port = self.wait_for_offer(udp_socket)
-                    print(f"Received offer from server {server_name} at address {server_ip}, attempting to connect...")
+                    print(colors.GREEN + f"Received offer from server {server_name} at address {server_ip}, attempting to connect..." + colors.RESET)
                     try:
                         # Connect to the server
                         self.connect_to_server(server_ip, server_tcp_port)
                     except (socket.error, socket.timeout) as e:
-                        print('Could not connect to server:', str(e))
+                        print(colors.RED + 'Could not connect to server:' + str(e) + colors.RESET)
                         continue
                     try:
                         # Play the game
                         with self.tcp_socket:
                             self.play(player_name)
-                            print("Server disconnected, listening for offer requests...")
+                            print(colors.BOLD_CYAN + "Server disconnected, listening for offer requests..." + colors.RESET)
                     except (socket.error, socket.timeout) as e:
-                        print(f"Communication error with the server: {e}")
+                        print(colors.RED + f"Communication error with the server: {e}" + colors.RESET)
 
                 except socket.timeout:
-                    print('No server found')
+                    print(colors.RED + 'No server found' + colors.RESET)
                     continue
                 except InvalidOffer as e:
-                    print(e.message)
+                    print(colors.RED + e.message + colors.RESET)
                     continue
 
     def __init__(self):
