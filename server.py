@@ -179,8 +179,11 @@ def start_game():
         # Send the question to all clients
         send_question(clients, question)
 
-        # Gather answers from all clients within the timeout period
-        answers = collect_answers(clients, ANSWER_TIMEOUT)
+        # Wait for 11 seconds
+        time.sleep(11)
+
+        # Gather answers from all clients
+        answers = collect_answers(clients)
 
         # Evaluate answers and prepare result message
         results = evaluate_answers(answers, question)
@@ -207,29 +210,26 @@ def send_results(clients, results, next_question):
 
 def send_question(clients, question):
     question_message = f"True or false: {question['question']}\n"
-    for client, socket in clients:
+    for _, socket in clients:
         length = len(question_message)
         socket.sendall(length.to_bytes(4, byteorder='big'))
         socket.sendall(question_message.encode('utf-8'))
 
 
-def collect_answers(clients, timeout):
+def collect_answers(clients):
     answers = []
     for client, socket in clients:
-        answer_event = threading.Event()
-        answer_thread = threading.Thread(target=collect_answer, args=(client, socket, answer_event))
-        answer_thread.start()
-        answer_event.wait(timeout)
-        if hasattr(answer_thread, 'answers'):
-            answers.extend(answer_thread.answers)
+        try:
+            answer = socket.recv(1).decode('utf-8')  # Receive only one character
+            answers.append((client, answer))
+        except:
+            pass
     return answers
 
 
 def collect_answer(client, socket, event):
     try:
-        answer_length = socket.recv(4)
-        answer_length = int.from_bytes(answer_length, byteorder='big')
-        answer = socket.recv(answer_length).decode('utf-8')
+        answer = socket.recv(4)
         setattr(threading.current_thread(), 'answers', [(client, answer)])
     except:
         pass
