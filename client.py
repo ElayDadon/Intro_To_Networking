@@ -16,6 +16,8 @@ class TriviaClient:
     MSG_LEN_HEADER = 4  # Header length indicating the length of the following message
     TIME_TO_SEND_ANS = 10  # Time allowed for sending an answer
     END_GAME_MSG = "Game over!"  # Message prefix indicating the end of the game
+    # Message contained in the last summary message that indicates that it's the last summary (the game is over)
+    END_GAME_SUMMARY = "Wins!"
     KEYS = ['N', 'F', '0', 'Y', 'T', '1']
 
     # Function to wait for a game offer from the server
@@ -28,13 +30,13 @@ class TriviaClient:
         try:
             (magic_cookie, msg_type, server_name, server_port) = struct.unpack('!4sB32sH', data)
         except struct.error:
-            raise InvalidOffer("Invalid UDP packet structure")
+            raise InvalidOffer(colors.RED + "Invalid UDP packet structure" + colors.RESET)
         # Check the magic cookie
         if magic_cookie != self.MAGIC_COOKIE:
-            raise InvalidOffer("Invalid magic cookie")
+            raise InvalidOffer(colors.RED + "Invalid magic cookie" + colors.RESET)
         # Check the message type
         if msg_type != self.OFFER_MSG_TYPE:
-            raise InvalidOffer("Invalid message type (not offer)")
+            raise InvalidOffer(colors.RED + "Invalid message type (not offer)" + colors.RESET)
 
         return server_name.decode().rstrip(), server_addr[0], server_port
 
@@ -64,6 +66,7 @@ class TriviaClient:
             if msg[:len(self.END_GAME_MSG)] != self.END_GAME_MSG:
                 # If not, process player answer
                 self.process_player_answer()
+                self.receive_summary()
             else:
                 break
 
@@ -87,7 +90,7 @@ class TriviaClient:
         key = input(colors.BOLD_CYAN + "Please enter your answer:" + colors.RESET)
         # Validate the answer
         while not self.is_valid_key(key) and not stop_flag.is_set():
-            print("Invalid answer")
+            print(colors.RED + "Invalid answer" + colors.RESET)
             key = input(colors.BOLD_CYAN + "Please enter your answer:" + colors.RESET)
         if not stop_flag.is_set():
             # If the stop flag is not set (the timeout didn't happen), send the answer to the server
@@ -97,11 +100,19 @@ class TriviaClient:
     def is_valid_key(self, key: str) -> bool:
         return key in self.KEYS
 
+    # Function to receive the summary from the server
+    def receive_summary(self):
+        # Receive message length header
+        summary_len = self.tcp_socket.recv(self.MSG_LEN_HEADER)
+        # Receive the message based on the received length
+        summary = self.tcp_socket.recv(int.from_bytes(summary_len, byteorder='big'))
+        print(colors.LIGHT_GREEN + summary.decode() + colors.RESET)
+
     # Function to start the trivia client loop
     def start(self) -> None:
         # Get player name
-        player_name = input("please enter your name:")
-        print("Client started, listening for offer requests...")
+        player_name = input(colors.BOLD_CYAN + "please enter your name:" + colors.RESET)
+        print(colors.GREEN + "Client started, listening for offer requests..." + colors.RESET)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
             while True:
                 try:
@@ -131,6 +142,8 @@ class TriviaClient:
 
     def __init__(self):
         self.tcp_socket = None
+
+
 
 
 class InvalidOffer(Exception):
