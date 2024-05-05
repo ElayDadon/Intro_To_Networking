@@ -14,7 +14,7 @@ broadcast_port = 13117
 # Global variables
 server_name = ""
 UDP_PORT = 13117
-ANSWER_TIMEOUT = 10  # Timeout for receiving answers in seconds
+ANSWER_TIMEOUT = 11  # Timeout for receiving answers in seconds
 MAGIC_COOKIE = b'\xab\xcd\xdc\xba'
 MESSAGE_TYPE = 2
 
@@ -180,7 +180,7 @@ def start_game():
         send_question(clients, question)
 
         # Wait for 11 seconds
-        time.sleep(11)
+        time.sleep(ANSWER_TIMEOUT)
 
         # Gather answers from all clients
         answers = collect_answers(clients)
