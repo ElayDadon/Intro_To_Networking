@@ -3,8 +3,10 @@ import threading
 import time
 import struct
 import ipaddress
+
 import netifaces as ni
 import random
+import select
 
 # Set the broadcast address and port
 broadcast_address = 0  # Change this to the appropriate broadcast address
@@ -136,8 +138,17 @@ def get_broadcast_ip():
 
     IP = get_ip_address()
     MASK = get_network_mask()
-    net = ipaddress.IPv4Network(IP + '/' + MASK, False)
-    broadcast_address = str(net.broadcast_address)
+    # Convert IP and MASK to IPv4Address objects
+    ip_address = ipaddress.IPv4Address(IP)
+    network_mask = ipaddress.IPv4Address(MASK)
+
+    # Convert IP and MASK to binary format
+    binary_ip = int(ip_address)
+    binary_mask = int(network_mask)
+
+    broad = binary_ip | (~binary_mask & 0xFFFFFFFF)
+    broadcast = '.'.join(str((broad >> i) & 0xFF) for i in (24, 16, 8, 0))
+    broadcast_address = str(broadcast)
 
 
 # Function to handle TCP connections from clients
@@ -174,42 +185,83 @@ def start_game():
     for i, (client, _) in enumerate(clients):
         welcome_message += f"Player {i + 1}: {client}\n"
     welcome_message += "==\n"
-
+    indicator = 0
+    active_clients = clients.copy()  # Initialize active clients as all clients
     for i, question in enumerate(questions):
         # Send the question to all clients
-        send_question(clients, question)
+        if indicator == 0:
+            question_for_start = welcome_message + "\nTrue or false:" + question['question']
+            send_question(active_clients, question_for_start)
 
         # Wait for 11 seconds
         time.sleep(ANSWER_TIMEOUT)
 
         # Gather answers from all clients
-        answers = collect_answers(clients)
+        answers = collect_answers(active_clients)
+        print("finished collecting answers\n")
 
+        active_users = active_clients.copy()
         # Evaluate answers and prepare result message
-        results = evaluate_answers(answers, question)
+        results, active_clients = evaluate_answers(answers, question,
+                                                   active_clients)  # Update active clients based on answers
+        print("finished evaluating answers\n")
+
+        # set the indicator to not add the welcome massage
+        indicator = 1
 
         # Prepare the next question
-        next_question = questions[i + 1] if i + 1 < len(questions) else None
+        next_question = "True or false: " + questions[i + 1]['question'] if i + 1 < len(questions) else None
 
         # Send result message to each client
-        send_results(clients, results, next_question)
+        if len(active_clients) == 1:
+            send_results(active_users, results)
+            send_summary(clients, active_clients[0])
+            break
+        elif len(active_clients) == 0:
+            active_clients = active_users
+            send_results(active_clients, results)
+            send_question(active_clients, next_question)
+        else:
+            print("I'm here")
+            print(len(active_clients))
+            send_results(active_clients, results)
+            send_question(active_clients, next_question)
+    if len(active_clients) == 1:
+        clean_Vars()
+        start_of_server()
+    else:
+        send_summary_mult_winners(clients, active_clients)
 
 
-def send_results(clients, results, next_question):
+def send_results(clients, results):
     for client, socket in clients:
         result_message = ''
-        for c, r in results:
-            if c == client:
-                result_message += r + '\n'
-        if next_question:
-            result_message += f"Next question: {next_question['question']}\n"
+        for r in results:
+            result_message += r + '\n'
+        length = len(result_message)
+        socket.sendall(length.to_bytes(4, byteorder='big'))
+        socket.sendall(result_message.encode('utf-8'))
+
+def send_summary_mult_winners(clients, winners):
+    result_message = "Game over!\nCongratulations to the winners:"
+    for client, _ in winners:
+        result_message += client[0] + ","
+    result_message = result_message[0:-1]
+    for client, socket in clients:
+        length = len(result_message)
+        socket.sendall(length.to_bytes(4, byteorder='big'))
+        socket.sendall(result_message.encode('utf-8'))
+
+def send_summary(clients, winner):
+    for client, socket in clients:
+        result_message = "Game over!\nCongratulations to the winner:" + winner[0] + "\n"
         length = len(result_message)
         socket.sendall(length.to_bytes(4, byteorder='big'))
         socket.sendall(result_message.encode('utf-8'))
 
 
 def send_question(clients, question):
-    question_message = f"True or false: {question['question']}\n"
+    question_message = f"{question}\n"
     for _, socket in clients:
         length = len(question_message)
         socket.sendall(length.to_bytes(4, byteorder='big'))
@@ -218,34 +270,42 @@ def send_question(clients, question):
 
 def collect_answers(clients):
     answers = []
-    for client, socket in clients:
-        try:
-            answer = socket.recv(1).decode('utf-8')  # Receive only one character
-            answers.append((client, answer))
-        except:
-            pass
+    print("collecting answers\n")
+
+    # Prepare lists for select
+    read_sockets = [socket for _, socket in clients]
+    write_sockets = []
+    error_sockets = []
+
+    # Use select to get the list of sockets ready for reading
+    ready_to_read, _, _ = select.select(read_sockets, write_sockets, error_sockets, 1)  # Timeout of 1 second
+
+    for client_name, socket in clients:
+        if socket in ready_to_read:
+            try:
+                answer = socket.recv(1).decode('utf-8')  # Receive only one character
+                answers.append(((client_name, socket), answer))  # Keep track of the full client tuple
+            except Exception as e:
+                print(f"An error occurred: {e}")
+        else:
+            print(f"No answer received from {client_name}")
+            answers.append(((client_name, socket), None))  # Append None if no answer received
+
     return answers
 
 
-def collect_answer(client, socket, event):
-    try:
-        answer = socket.recv(4)
-        setattr(threading.current_thread(), 'answers', [(client, answer)])
-    except:
-        pass
-    event.set()  # Signal that the answer has been received
-
-
-def evaluate_answers(answers, question):
+def evaluate_answers(answers, question, active_clients):
     results = []
+    print("evaluating answers\n")
     for i, (client, answer) in enumerate(answers):
         if answer in ('T', 'Y', '1') and question['is_true']:
-            results.append((client, f'is Right! (Question {i + 1})'))
+            results.append(f'{client[0]} is Right!')  # client[0] is the client's name
         elif answer in ('N', 'F', '0') and not question['is_true']:
-            results.append((client, f'is Right! (Question {i + 1})'))
+            results.append(f'{client[0]} is Right!')
         else:
-            results.append((client, f'is Wrong! (Question {i + 1})'))
-    return results
+            results.append(f'{client[0]} is Wrong!')
+            active_clients.remove(client)  # Now client is the full tuple, so it can be removed from active_clients
+    return results, active_clients
 
 
 # Main function to run the server
@@ -257,38 +317,45 @@ def main():
         print(broadcast_address)
         # Get server name from user input
         server_name = input("Enter server name: ")
-
-        # Create a TCP socket
-        tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        # Bind the socket to a port
-        tcp_socket.bind(('0.0.0.0', 0))
-        # get the TCP_PORT that was allocated dynamically
-        TCP_PORT = tcp_socket.getsockname()[1]
-        set_tcp_port(TCP_PORT)
-        # Listen for incoming connections
-        tcp_socket.listen()
-
-        # Get the dynamically assigned TCP port
-
-        # Start UDP broadcast thread after TCP port assignment
-        update_last_tcp_connection()
-        udp_thread = threading.Thread(target=udp_broadcast, args=(server_name,))
-        udp_thread.daemon = True
-        udp_thread.start()
-
-        print("Server started, listening on IP address", server_address)
-
-        # Accept incoming connections and handle clients
-        while True:
-            client_socket, client_address = tcp_socket.accept()
-            client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address))
-            client_thread.start()
+        start_of_server()
 
     except Exception as e:
         print("Error in server:", e)
-    finally:
-        tcp_socket.close()
+
+def start_of_server():
+    # Create a TCP socket
+    tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    # Bind the socket to a port
+    tcp_socket.bind(('0.0.0.0', 0))
+    # get the TCP_PORT that was allocated dynamically
+    TCP_PORT = tcp_socket.getsockname()[1]
+    set_tcp_port(TCP_PORT)
+    # Listen for incoming connections
+    tcp_socket.listen()
+
+    # Get the dynamically assigned TCP port
+
+    # Start UDP broadcast thread after TCP port assignment
+    update_last_tcp_connection()
+    udp_thread = threading.Thread(target=udp_broadcast, args=(server_name,))
+    udp_thread.daemon = True
+    udp_thread.start()
+
+    print("Server started, listening on IP address", server_address)
+
+    # Accept incoming connections and handle clients
+    while True:
+        client_socket, client_address = tcp_socket.accept()
+        client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address))
+        client_thread.start()
+
+def clean_Vars():
+    global clients
+    for client, socket in clients:
+        socket.close()
+    clients = []
+
 
 
 # Entry point
