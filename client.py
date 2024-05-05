@@ -117,7 +117,7 @@ class TriviaClient:
             udp_socket.bind(("", self.BROADCAST_PORT))
             while True:
                 try:
-                    print("Before waiting for offer")
+                    print(colors.BOLD_CYAN + "Before waiting for offer" + colors.RESET)
                     # Wait for a game offer
                     server_name, server_ip, server_tcp_port = self.wait_for_offer(udp_socket)
                     print(colors.GREEN + f"Received offer from server {server_name} at address {server_ip}, attempting to connect..." + colors.RESET)
