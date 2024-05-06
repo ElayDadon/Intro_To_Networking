@@ -333,6 +333,7 @@ def start_of_server():
     # get the TCP_PORT that was allocated dynamically
     TCP_PORT = tcp_socket.getsockname()[1]
     set_tcp_port(TCP_PORT)
+    print(TCP_PORT)
     # Listen for incoming connections
     tcp_socket.listen()
 
