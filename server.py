@@ -104,6 +104,7 @@ def start_game():
     if not clients:
         print(Colors.RED + "No clients connected" + Colors.RESET)
         return
+
     subject = None
     questions = None
     subjects = [Subjects.subject_0, Subjects.subject_1, Subjects.subject_2, Subjects.subject_3, Subjects.subject_4, Subjects.subject_5,
@@ -127,7 +128,7 @@ def start_game():
         # if we removed a player that disconncted mid-game, we need to remove him also
         if indicator == 0:
             question_for_start = welcome_message + "\nTrue or false:" + question['question']
-            send_question(active_clients, question_for_start)
+            send_question(clients, question_for_start)
 
         # Wait for 11 seconds
         time.sleep(ANSWER_TIMEOUT)
@@ -159,7 +160,7 @@ def start_game():
             clean_Vars()
             start_of_server()
         else:
-            send_results(active_clients, results)
+            send_results(active_users, results)
             send_question(active_clients, next_question)
     if len(active_clients) == 1:
         update_statistics(len(clients), len(active_clients))
@@ -192,7 +193,8 @@ def print_statistics():
 
 
 def send_results(Round_players, results):
-    for client, Player_Socket in Round_players:
+    Round_players_cache = Round_players.copy()
+    for client, Player_Socket in Round_players_cache:
         result_message = ''
         for r in results:
             result_message += r + '\n'
@@ -208,11 +210,12 @@ def send_results(Round_players, results):
 
 
 def send_summary_mult_winners(All_The_Clients, winners):
+    Round_players_cache = All_The_Clients.copy()
     result_message = "Game over!\nCongratulations to the winners:"
     for client, _ in winners:
         result_message += client[0] + ","
     result_message = result_message[0:-1]
-    for client, Client_sock in All_The_Clients:
+    for client, Client_sock in Round_players_cache:
         try:
             length = len(result_message)
             Client_sock.sendall(length.to_bytes(4, byteorder='big'))
@@ -225,7 +228,8 @@ def send_summary_mult_winners(All_The_Clients, winners):
 
 
 def send_summary(All_The_Clients, winner):
-    for client, client_sock in All_The_Clients:
+    Round_players_cache = All_The_Clients.copy()
+    for client, client_sock in Round_players_cache:
         try:
             result_message = "Game over!\nCongratulations to the winner:" + winner[0] + "\n"
             length = len(result_message)
@@ -239,11 +243,12 @@ def send_summary(All_The_Clients, winner):
 
 
 def send_question(Players, question):
+    players_cache = Players.copy()
     question_message = f"{question}\n"
-    print(Colors.BOLD_CYAN + question_message+ "Played by:" + Colors.RESET)
-    for client, player_socket in Players:
+    print(Colors.BOLD_CYAN + question_message + "Played by:" + Colors.RESET)
+    for client, player_socket in players_cache:
         try:
-            print(Colors.BOLD_CYAN + client + Colors.RESET)
+            print(Colors.BOLD_CYAN + client +" " + Colors.RESET)
             length = len(question_message)
             player_socket.sendall(length.to_bytes(4, byteorder='big'))
             player_socket.sendall(question_message.encode('utf-8'))
@@ -255,7 +260,7 @@ def send_question(Players, question):
 
 def collect_answers(Players):
     answers = []
-
+    players_cache = Players.copy()
     # Prepare lists for select
     read_sockets = [Player_Sock for _, Player_Sock in Players]
     write_sockets = [Player_Sock for _, Player_Sock in Players]
@@ -264,7 +269,7 @@ def collect_answers(Players):
     # Use select to get the list of sockets ready for reading
     ready_to_read, ready_to_write, _ = select.select(read_sockets, write_sockets, error_sockets, 1)  # Timeout of 1 second
 
-    for client_name, player_socket in Players:
+    for client_name, player_socket in players_cache:
         if player_socket in ready_to_read:
             try:
                 answer = player_socket.recv(1).decode('utf-8')  # Receive only one character
@@ -272,7 +277,8 @@ def collect_answers(Players):
                     print(Colors.RED + "player: " + client_name + " Disconnected in the middle of the game!(without input)\n" + Colors.RESET)
                     clients.remove((client_name, player_socket))  # Remove the client from the list
                     active_clients.remove((client_name, player_socket))
-                answers.append(((client_name, player_socket), answer))  # Keep track of the full client tuple
+                else:
+                    answers.append(((client_name, player_socket), answer))  # Keep track of the full client tuple
             except Exception as e:
                 print(Colors.RED + f"An error occurred: {e}\n" + Colors.RESET)
                 clients.remove((client_name, player_socket))  # Remove the client from the list
@@ -330,7 +336,7 @@ def start_of_server():
     udp_thread.daemon = True
     udp_thread.start()
 
-    print(Colors.BOLD_CYAN + "Server started, listening on IP address" + server_address + Colors.RESET)
+    print(Colors.BOLD_CYAN + "Server started, listening on IP address " + server_address + Colors.RESET)
 
     # Accept incoming connections and handle clients
     while True:
