@@ -115,3 +115,18 @@ class Subjects:
         {"question": "Nikola Tesla invented the light bulb", "is_true": False},
         {"question": "Thomas Edison discovered the theory of relativity", "is_true": False}
     ]
+
+    subject_8 = "Harry Potter Trivia"
+    questions_8 = [
+        {"question": "Harry Potter's godfather is Sirius Black", "is_true": True},
+        {"question": "The spell used to summon objects to the caster is called 'Accio'", "is_true": True},
+        {"question": "Luna Lovegood belongs to Gryffindor house", "is_true": False},
+        {"question": "Hagrid's three-headed dog is named Norbert", "is_true": False},
+        {"question": "Defense Against the Dark Arts during Harry's second year is taught by Remus Lupin",
+         "is_true": False},
+        {"question": "The Weasley family's house elf is named Winky", "is_true": False},
+        {"question": "The dark wizard who killed Harry's parents is Lord Voldemort", "is_true": True},
+        {"question": "Buckbeak is a Hippogriff", "is_true": True},
+        {"question": "The headmaster of Hogwarts is Severus Snape", "is_true": False}
+    ]
+
