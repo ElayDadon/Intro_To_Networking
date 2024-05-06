@@ -161,7 +161,7 @@ def start_game():
         else:
             print("I'm here")
             print(len(active_clients))
-            send_results(active_clients, results)
+            send_results(active_users, results)
             send_question(active_clients, next_question)
     if len(active_clients) == 1:
         clean_Vars()
@@ -297,6 +297,7 @@ def start_of_server():
     # get the TCP_PORT that was allocated dynamically
     TCP_PORT = tcp_socket.getsockname()[1]
     set_tcp_port(TCP_PORT)
+    print(TCP_PORT)
     # Listen for incoming connections
     tcp_socket.listen()
 
