@@ -38,7 +38,7 @@ class TriviaClient:
         return server_name.decode().rstrip(), server_addr[0], server_port
 
     # Function to connect the game server over TCP and updating tcp_socket of client
-    def connect_to_server(self, server_ip: str, server_port: int) -> socket.socket:
+    def connect_to_server(self, server_ip: str, server_port: int):
         tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tcp_socket.connect((server_ip, server_port))
         self.tcp_socket = tcp_socket
@@ -111,12 +111,12 @@ class TriviaClient:
         # Get player name
         player_name = input(colors.BOLD_CYAN + "please enter your name:" + colors.RESET)
         print(colors.GREEN + "Client started, listening for offer requests..." + colors.RESET)
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
-            # Bind the UDP socket to a specific address and port
-            udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            udp_socket.bind(("", self.BROADCAST_PORT))
-            while True:
-                try:
+        while True:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
+                    # Bind the UDP socket to a specific address and port
+                    udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    udp_socket.bind(("", self.BROADCAST_PORT))
                     print(colors.BOLD_CYAN + "Before waiting for offer" + colors.RESET)
                     # Wait for a game offer
                     server_name, server_ip, server_tcp_port = self.wait_for_offer(udp_socket)
@@ -135,12 +135,12 @@ class TriviaClient:
                     except (socket.error, socket.timeout) as e:
                         print(colors.RED + f"Communication error with the server: {e}" + colors.RESET)
 
-                except socket.timeout:
-                    print(colors.RED + 'No server found' + colors.RESET)
-                    continue
-                except InvalidOffer as e:
-                    print(colors.RED + e.message + colors.RESET)
-                    continue
+            except socket.timeout:
+                print(colors.RED + 'No server found' + colors.RESET)
+                continue
+            except InvalidOffer as e:
+                print(colors.RED + e.message + colors.RESET)
+                continue
 
     def __init__(self):
         self.tcp_socket = None

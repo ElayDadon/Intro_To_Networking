@@ -62,7 +62,7 @@ questions_3 = [
 ]
 
 # Define a dictionary to hold the global variable
-global_vars = {"TCP_PORT": 0, "last_tcp_connection": time.time()}  # will be assigned later
+global_vars = {"TCP_PORT": 0, "last_tcp_connection": float('inf')}  # will be assigned later
 
 
 def set_tcp_port(port):
@@ -280,15 +280,15 @@ def collect_answers(Players):
         if player_socket in ready_to_read:
             try:
                 answer = player_socket.recv(1).decode('utf-8')  # Receive only one character
-                print(client_name + " " + answer)
-                print(answer == "")
+                if answer == "":
+                    print("player: " + client_name + " Disconnected in the middle of the game!(without input)\n")
+                    clients.remove((client_name, player_socket))  # Remove the client from the list
+                    active_clients.remove((client_name, player_socket))
                 answers.append(((client_name, player_socket), answer))  # Keep track of the full client tuple
             except Exception as e:
                 print(f"An error occurred: {e}\n")
                 clients.remove((client_name, player_socket))  # Remove the client from the list
                 active_clients.remove((client_name, player_socket))
-        elif player_socket in ready_to_write:
-            print("player: " + client_name + " Disconnected in the middle of the game!\n")
         else:
             print(f"No answer received from {client_name}")
             answers.append(((client_name, player_socket), None))  # Append None if no answer received
@@ -326,6 +326,7 @@ def main():
 
 def start_of_server():
     # Create a TCP socket
+    global_vars["last_tcp_connection"] = float('inf')
     tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     # Bind the socket to a port
@@ -339,7 +340,6 @@ def start_of_server():
     # Get the dynamically assigned TCP port
 
     # Start UDP broadcast thread after TCP port assignment
-    update_last_tcp_connection()
     udp_thread = threading.Thread(target=udp_broadcast)
     udp_thread.daemon = True
     udp_thread.start()
