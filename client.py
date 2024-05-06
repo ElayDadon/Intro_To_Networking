@@ -43,6 +43,20 @@ class TriviaClient:
         tcp_socket.connect((server_ip, server_port))
         self.tcp_socket = tcp_socket
 
+    # Function for getting and sending player's answer
+    def process_player_answer(self):
+        # Event for stopping the answer sending thread
+        stop_flag = threading.Event()
+        # Thread to send the answer
+        send_key_t = threading.Thread(target=self.send_key, args=(stop_flag,))
+        send_key_t.start()
+        try:
+            # Wait for TIME_TO_SEND_ANS seconds for the player to enter an answer
+            send_key_t.join(timeout=self.TIME_TO_SEND_ANS)
+            stop_flag.set()
+        except threading.ThreadError:
+            print(colors.RED + "Error while joining thread" + colors.RESET)
+
     # Function to handle the game
     def play(self, player_name: str) -> None:
         # Send player name to the server
@@ -68,20 +82,10 @@ class TriviaClient:
             else:
                 break
 
-    # Function for getting and sending player's answer
-    def process_player_answer(self):
-        # Event for stopping the answer sending thread
-        stop_flag = threading.Event()
-        # Thread to send the answer
-        send_key_t = threading.Thread(target=self.send_key, args=(stop_flag,))
-        send_key_t.start()
-        try:
-            # Wait for TIME_TO_SEND_ANS seconds for the player to enter an answer
-            send_key_t.join(timeout=self.TIME_TO_SEND_ANS)
-            stop_flag.set()
-        except threading.ThreadError:
-            print(colors.RED + "Error while joining thread" + colors.RESET)
-
+    # Function to validate player answers
+    def is_valid_key(self, key: str) -> bool:
+        return key in self.KEYS
+    
     # Function for sending the player's answer
     def send_key(self, stop_flag: threading.Event) -> None:
         # Get player input for the answer
@@ -93,10 +97,6 @@ class TriviaClient:
         if not stop_flag.is_set():
             # If the stop flag is not set (the timeout didn't happen), send the answer to the server
             self.tcp_socket.sendall(key.encode())
-
-    # Function to validate player answers
-    def is_valid_key(self, key: str) -> bool:
-        return key in self.KEYS
 
     # Function to receive the summary from the server
     def receive_summary(self):
