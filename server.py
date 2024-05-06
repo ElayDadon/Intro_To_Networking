@@ -2,8 +2,6 @@ import socket
 import threading
 import time
 import struct
-import ipaddress
-import netifaces as ni
 import random
 import select
 
@@ -99,7 +97,7 @@ def udp_broadcast():
                                         get_tcp_port())
 
             # Broadcast offer message
-            udp_socket.sendto(offer_message, (broadcast_address, UDP_PORT))
+            udp_socket.sendto(offer_message, ('<broadcast>', UDP_PORT))
             time.sleep(1)  # Broadcast every second
 
     except Exception as e:
@@ -118,37 +116,6 @@ def get_ip_address():
     hostname = socket.gethostname()
     ip_address = socket.gethostbyname(hostname)
     return ip_address
-
-
-def get_network_mask():
-    interfaces = ni.interfaces()
-    for i in interfaces:
-        try:
-            ip = ni.ifaddresses(i)[ni.AF_INET][0]['addr']
-            netmask = ni.ifaddresses(i)[ni.AF_INET][0]['netmask']
-            if ip == get_ip_address():
-                return netmask
-        except KeyError:
-            pass
-    return None
-
-
-def get_broadcast_ip():
-    global broadcast_address
-
-    IP = get_ip_address()
-    MASK = get_network_mask()
-    # Convert IP and MASK to IPv4Address objects
-    ip_address = ipaddress.IPv4Address(IP)
-    network_mask = ipaddress.IPv4Address(MASK)
-
-    # Convert IP and MASK to binary format
-    binary_ip = int(ip_address)
-    binary_mask = int(network_mask)
-
-    broad = binary_ip | (~binary_mask & 0xFFFFFFFF)
-    broadcast = '.'.join(str((broad >> i) & 0xFF) for i in (24, 16, 8, 0))
-    broadcast_address = str(broadcast)
 
 
 # Function to handle TCP connections from clients
@@ -303,22 +270,24 @@ def collect_answers(Players):
 
     # Prepare lists for select
     read_sockets = [Player_Sock for _, Player_Sock in Players]
-    write_sockets = []
+    write_sockets = [Player_Sock for _, Player_Sock in Players]
     error_sockets = []
 
     # Use select to get the list of sockets ready for reading
-    ready_to_read, _, error_sockets = select.select(read_sockets, write_sockets, error_sockets, 1)  # Timeout of 1 second
+    ready_to_read, ready_to_write, _ = select.select(read_sockets, write_sockets, error_sockets, 1)  # Timeout of 1 second
 
     for client_name, player_socket in Players:
         if player_socket in ready_to_read:
             try:
                 answer = player_socket.recv(1).decode('utf-8')  # Receive only one character
+                print(client_name + " " + answer)
+                print(answer == "")
                 answers.append(((client_name, player_socket), answer))  # Keep track of the full client tuple
             except Exception as e:
                 print(f"An error occurred: {e}\n")
                 clients.remove((client_name, player_socket))  # Remove the client from the list
                 active_clients.remove((client_name, player_socket))
-        elif player_socket in error_sockets:
+        elif player_socket in ready_to_write:
             print("player: " + client_name + " Disconnected in the middle of the game!\n")
         else:
             print(f"No answer received from {client_name}")
@@ -345,7 +314,6 @@ def evaluate_answers(answers, question):
 def main():
     global server_name
     try:
-        get_broadcast_ip()
         get_server_ip()
         print(broadcast_address)
         # Get server name from user input
