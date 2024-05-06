@@ -204,7 +204,7 @@ def send_results(Round_players, results):
             print(Colors.BOLD_CYAN + "Client disconnected" + Colors.RESET)
             clients.remove((client, Player_Socket))  # Remove the client from the list
             active_clients.remove((client, Player_Socket))
-    print(result_message)
+    print(Colors.BOLD_CYAN + result_message + Colors.RESET)
 
 
 def send_summary_mult_winners(All_The_Clients, winners):
@@ -221,7 +221,7 @@ def send_summary_mult_winners(All_The_Clients, winners):
             print(Colors.BOLD_CYAN + "Client disconnected" + Colors.RESET)
             clients.remove((client, Client_sock))  # Remove the client from the list
             active_clients.remove((client, Client_sock))
-    print(result_message)
+    print(Colors.BOLD_CYAN + result_message + Colors.RESET)
 
 
 def send_summary(All_The_Clients, winner):
@@ -235,15 +235,15 @@ def send_summary(All_The_Clients, winner):
             print(Colors.BOLD_CYAN + "Client disconnected" + Colors.RESET)
             clients.remove((client, client_sock))  # Remove the client from the list
             active_clients.remove((client, client_sock))
-    print(result_message)
+    print(Colors.BOLD_CYAN + result_message + Colors.RESET)
 
 
 def send_question(Players, question):
     question_message = f"{question}\n"
-    print(question_message+ "Played by:")
+    print(Colors.BOLD_CYAN + question_message+ "Played by:" + Colors.RESET)
     for client, player_socket in Players:
         try:
-            print(client)
+            print(Colors.BOLD_CYAN + client + Colors.RESET)
             length = len(question_message)
             player_socket.sendall(length.to_bytes(4, byteorder='big'))
             player_socket.sendall(question_message.encode('utf-8'))
