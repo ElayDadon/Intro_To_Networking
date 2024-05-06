@@ -3,6 +3,7 @@ import threading
 import time
 import struct
 import ipaddress
+import colors
 
 import netifaces as ni
 import random
@@ -103,7 +104,7 @@ def udp_broadcast(server_name):
             time.sleep(1)  # Broadcast every second
 
     except Exception as e:
-        print("Error in UDP broadcast:", e)
+        print(colors.RED + "Error in UDP broadcast:" + e + colors.RESET)
 
 
 # function to handle getting the broadcast address
@@ -156,13 +157,13 @@ def handle_client(client_socket, client_address):
     try:
         # Receive player name from client
         player_name = client_socket.recv(1024).decode('utf-8').strip()
-        print(player_name)
+        print(colors.BOLD_CYAN + player_name + colors.RESET)
         with client_lock:
             clients.append((player_name, client_socket))
         update_last_tcp_connection()  # Update the last TCP connection time
 
     except Exception as e:
-        print("Error handling client:", e)
+        print(colors.RED + "Error handling client:" + e + colors.RESET)
         client_socket.close()
         with client_lock:
             clients.remove((player_name, client_socket))
@@ -170,7 +171,7 @@ def handle_client(client_socket, client_address):
 
 def start_game():
     if not clients:
-        print("No clients connected")
+        print(colors.RED + "No clients connected" + colors.RESET)
         return
 
     subjects = [subject_1, subject_2, subject_3]
@@ -198,13 +199,13 @@ def start_game():
 
         # Gather answers from all clients
         answers = collect_answers(active_clients)
-        print("finished collecting answers\n")
+        print(colors.BOLD_CYAN + "finished collecting answers\n" + colors.RESET)
 
         active_users = active_clients.copy()
         # Evaluate answers and prepare result message
         results, active_clients = evaluate_answers(answers, question,
                                                    active_clients)  # Update active clients based on answers
-        print("finished evaluating answers\n")
+        print(colors.BOLD_CYAN + "finished evaluating answers\n" + colors.RESET)
 
         # set the indicator to not add the welcome massage
         indicator = 1
@@ -227,7 +228,7 @@ def start_game():
             send_results(active_clients, results)
             send_question(active_clients, next_question)
     if len(active_clients) == 1:
-        clean_Vars()
+        clean_vars()
         start_of_server()
     else:
         send_summary_mult_winners(clients, active_clients)
@@ -242,6 +243,7 @@ def send_results(clients, results):
         socket.sendall(length.to_bytes(4, byteorder='big'))
         socket.sendall(result_message.encode('utf-8'))
 
+
 def send_summary_mult_winners(clients, winners):
     result_message = "Game over!\nCongratulations to the winners:"
     for client, _ in winners:
@@ -251,6 +253,7 @@ def send_summary_mult_winners(clients, winners):
         length = len(result_message)
         socket.sendall(length.to_bytes(4, byteorder='big'))
         socket.sendall(result_message.encode('utf-8'))
+
 
 def send_summary(clients, winner):
     for client, socket in clients:
@@ -270,7 +273,7 @@ def send_question(clients, question):
 
 def collect_answers(clients):
     answers = []
-    print("collecting answers\n")
+    print(colors.BOLD_CYAN + "collecting answers\n" + colors.RESET)
 
     # Prepare lists for select
     read_sockets = [socket for _, socket in clients]
@@ -286,9 +289,9 @@ def collect_answers(clients):
                 answer = socket.recv(1).decode('utf-8')  # Receive only one character
                 answers.append(((client_name, socket), answer))  # Keep track of the full client tuple
             except Exception as e:
-                print(f"An error occurred: {e}")
+                print(colors.RED + f"An error occurred: {e}" + colors.RESET)
         else:
-            print(f"No answer received from {client_name}")
+            print(colors.RED + f"No answer received from {client_name}" + colors.RESET)
             answers.append(((client_name, socket), None))  # Append None if no answer received
 
     return answers
@@ -316,11 +319,12 @@ def main():
         get_server_ip()
         print(broadcast_address)
         # Get server name from user input
-        server_name = input("Enter server name: ")
+        server_name = input(colors.BOLD_CYAN + "Enter server name: " + colors.RESET)
         start_of_server()
 
     except Exception as e:
-        print("Error in server:", e)
+        print(colors.RED + "Error in server:" + e + colors.RESET)
+
 
 def start_of_server():
     # Create a TCP socket
@@ -342,7 +346,7 @@ def start_of_server():
     udp_thread.daemon = True
     udp_thread.start()
 
-    print("Server started, listening on IP address", server_address)
+    print(colors.GREEN + "Server started, listening on IP address" + server_address + colors.RESET)
 
     # Accept incoming connections and handle clients
     while True:
@@ -350,12 +354,12 @@ def start_of_server():
         client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address))
         client_thread.start()
 
-def clean_Vars():
+
+def clean_vars():
     global clients
     for client, socket in clients:
         socket.close()
     clients = []
-
 
 
 # Entry point
