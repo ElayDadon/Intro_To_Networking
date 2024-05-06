@@ -5,6 +5,9 @@ class Colors:
     RESET = '\033[0m'
     BOLD_CYAN = '\033[1;36m'
     Bold_Blue = '\033[1;34m'
+    YELLOW = '\033[33m'
+    GOLDEN_YELLOW = '\033[38;5;220m'
+    LIGHT_YELLOW = '\033[93m'
 
 
 class Subjects:

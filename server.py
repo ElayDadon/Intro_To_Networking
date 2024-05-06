@@ -5,7 +5,6 @@ import struct
 import random
 import select
 from config import Colors, Subjects
-
 # Set the broadcast address and port
 broadcast_address = 0  # Change this to the appropriate broadcast address
 server_address = 0
@@ -22,8 +21,10 @@ MESSAGE_TYPE = 2
 clients = []
 active_clients = []
 client_lock = threading.Lock()
-
-
+# Initialize statistics variables
+games_played = 0
+players_played = 0
+winners = 0
 # Define a dictionary to hold the global variable
 global_vars = {"TCP_PORT": 0, "last_tcp_connection": float('inf')}  # will be assigned later
 
@@ -64,7 +65,7 @@ def udp_broadcast():
             time.sleep(1)  # Broadcast every second
 
     except Exception as e:
-        print(Colors.RED + "Error in UDP broadcast:" + e + Colors.RESET)
+        print(Colors.RED + "Error in UDP broadcast:" + str(e) + Colors.RESET)
 
 
 # function to handle getting the broadcast address
@@ -87,13 +88,12 @@ def handle_client(client_socket, client_address):
     try:
         # Receive player name from client
         player_name = client_socket.recv(1024).decode('utf-8').strip()
-        print(Colors.BOLD_CYAN + player_name + Colors.RESET)
         with client_lock:
             clients.append((player_name, client_socket))
         update_last_tcp_connection()  # Update the last TCP connection time
 
     except Exception as e:
-        print(Colors.RED + "Error handling client:" + e + Colors.RESET)
+        print(Colors.RED + "Error handling client:" + str(e) + Colors.RESET)
         client_socket.close()
         with client_lock:
             clients.remove((player_name, client_socket))
@@ -108,11 +108,11 @@ def start_game():
     questions = None
     subjects = [Subjects.subject_0, Subjects.subject_1, Subjects.subject_2, Subjects.subject_3, Subjects.subject_4, Subjects.subject_5,
                 Subjects.subject_6, Subjects.subject_7]
-    questions_sets = [Subjects.subject_0, Subjects.questions_1, Subjects.questions_2, Subjects.questions_3, Subjects.questions_4,
+    questions_sets = [Subjects.questions_0, Subjects.questions_1, Subjects.questions_2, Subjects.questions_3, Subjects.questions_4,
                      Subjects.questions_5, Subjects.questions_6, Subjects.questions_7]
 
     if subjects:
-        random_number = random.randint(0, 2)
+        random_number = random.randint(0, 7)
         subject = subjects[random_number]
         questions = questions_sets[random_number]
 
@@ -134,12 +134,10 @@ def start_game():
 
         # Gather answers from all clients
         answers = collect_answers(active_clients)
-        print(Colors.BOLD_CYAN + "finished collecting answers\n" + Colors.RESET)
 
         active_users = active_clients.copy()
         # Evaluate answers and prepare result message
         results, active_clients = evaluate_answers(answers, question)  # Update active clients based on answers
-        print(Colors.BOLD_CYAN + "finished evaluating answers\n" + Colors.RESET)
 
         # set the indicator to not add the welcome massage
         indicator = 1
@@ -161,15 +159,36 @@ def start_game():
             clean_Vars()
             start_of_server()
         else:
-            print("I'm here")
-            print(len(active_clients))
-            send_results(active_users, results)
+            send_results(active_clients, results)
             send_question(active_clients, next_question)
     if len(active_clients) == 1:
+        update_statistics(len(clients), len(active_clients))
+        print_statistics()
         clean_Vars()
         start_of_server()
     else:
         send_summary_mult_winners(clients, active_clients)
+        update_statistics(len(clients), len(active_clients))
+        print_statistics()
+        clean_Vars()
+        start_of_server()
+
+
+def update_statistics(num_players, num_winners):
+    global games_played
+    global players_played
+    global winners
+
+    games_played += 1
+    players_played += num_players
+    winners += num_winners
+
+
+def print_statistics():
+    print(Colors.LIGHT_YELLOW + "Statistics: " + Colors.RESET)
+    print(Colors.GOLDEN_YELLOW + f"Games played: {games_played}" + Colors.RESET)
+    print(Colors.GOLDEN_YELLOW + f"Players played: {players_played}" + Colors.RESET)
+    print(Colors.YELLOW + f"Winners: {winners}" + Colors.RESET)
 
 
 def send_results(Round_players, results):
@@ -185,6 +204,7 @@ def send_results(Round_players, results):
             print(Colors.BOLD_CYAN + "Client disconnected" + Colors.RESET)
             clients.remove((client, Player_Socket))  # Remove the client from the list
             active_clients.remove((client, Player_Socket))
+    print(result_message)
 
 
 def send_summary_mult_winners(All_The_Clients, winners):
@@ -201,6 +221,7 @@ def send_summary_mult_winners(All_The_Clients, winners):
             print(Colors.BOLD_CYAN + "Client disconnected" + Colors.RESET)
             clients.remove((client, Client_sock))  # Remove the client from the list
             active_clients.remove((client, Client_sock))
+    print(result_message)
 
 
 def send_summary(All_The_Clients, winner):
@@ -214,12 +235,15 @@ def send_summary(All_The_Clients, winner):
             print(Colors.BOLD_CYAN + "Client disconnected" + Colors.RESET)
             clients.remove((client, client_sock))  # Remove the client from the list
             active_clients.remove((client, client_sock))
+    print(result_message)
 
 
 def send_question(Players, question):
     question_message = f"{question}\n"
+    print(question_message+ "Played by:")
     for client, player_socket in Players:
         try:
+            print(client)
             length = len(question_message)
             player_socket.sendall(length.to_bytes(4, byteorder='big'))
             player_socket.sendall(question_message.encode('utf-8'))
@@ -231,7 +255,6 @@ def send_question(Players, question):
 
 def collect_answers(Players):
     answers = []
-    print(Colors.BOLD_CYAN + "collecting answers\n" + Colors.RESET)
 
     # Prepare lists for select
     read_sockets = [Player_Sock for _, Player_Sock in Players]
@@ -263,7 +286,6 @@ def collect_answers(Players):
 
 def evaluate_answers(answers, question):
     results = []
-    print(Colors.BOLD_CYAN + "evaluating answers\n" + Colors.RESET)
     for i, (client, answer) in enumerate(answers):
         if answer in ('T', 'Y', '1') and question['is_true']:
             results.append(f'{client[0]} is Right!')  # client[0] is the client's name
@@ -280,13 +302,12 @@ def main():
     global server_name
     try:
         get_server_ip()
-        print(Colors.BOLD_CYAN + broadcast_address + Colors.RESET)
         # Get server name from user input
         server_name = input("Enter server name: ")
         start_of_server()
 
     except Exception as e:
-        print(Colors.RED + "Error in server:" + e + Colors.RESET)
+        print(Colors.RED + "Error in server:" + str(e) + Colors.RESET)
 
 
 def start_of_server():
@@ -299,7 +320,6 @@ def start_of_server():
     # get the TCP_PORT that was allocated dynamically
     TCP_PORT = tcp_socket.getsockname()[1]
     set_tcp_port(TCP_PORT)
-    print(TCP_PORT)
     # Listen for incoming connections
     tcp_socket.listen()
 
