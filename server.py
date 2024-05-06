@@ -169,12 +169,10 @@ def start_game():
 
         # Gather answers from all clients
         answers = collect_answers(active_clients)
-        print("finished collecting answers\n")
 
         active_users = active_clients.copy()
         # Evaluate answers and prepare result message
         results, active_clients = evaluate_answers(answers, question)  # Update active clients based on answers
-        print("finished evaluating answers\n")
 
         # set the indicator to not add the welcome massage
         indicator = 1
@@ -196,8 +194,6 @@ def start_game():
             clean_Vars()
             start_of_server()
         else:
-            print("I'm here")
-            print(len(active_clients))
             send_results(active_clients, results)
             send_question(active_clients, next_question)
     if len(active_clients) == 1:
@@ -253,8 +249,10 @@ def send_summary(All_The_Clients, winner):
 
 def send_question(Players, question):
     question_message = f"{question}\n"
+    print(question_message+ "Played by:")
     for client, player_socket in Players:
         try:
+            print(client)
             length = len(question_message)
             player_socket.sendall(length.to_bytes(4, byteorder='big'))
             player_socket.sendall(question_message.encode('utf-8'))
