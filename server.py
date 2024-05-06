@@ -3,6 +3,8 @@ import threading
 import time
 import struct
 import ipaddress
+import colors
+
 import netifaces as ni
 import random
 import select
@@ -21,7 +23,6 @@ MESSAGE_TYPE = 2
 
 # Define a list to hold connected clients
 clients = []
-active_clients = []
 client_lock = threading.Lock()
 
 subject_1 = "production of coffee mugs in China"
@@ -81,7 +82,7 @@ def update_last_tcp_connection():
 
 
 # Function to handle UDP broadcast
-def udp_broadcast():
+def udp_broadcast(server_name):
     try:
         # Create a UDP socket
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -103,7 +104,7 @@ def udp_broadcast():
             time.sleep(1)  # Broadcast every second
 
     except Exception as e:
-        print("Error in UDP broadcast:", e)
+        print(colors.RED + "Error in UDP broadcast:" + e + colors.RESET)
 
 
 # function to handle getting the broadcast address
@@ -153,29 +154,26 @@ def get_broadcast_ip():
 
 # Function to handle TCP connections from clients
 def handle_client(client_socket, client_address):
-    player_name = None
     try:
         # Receive player name from client
         player_name = client_socket.recv(1024).decode('utf-8').strip()
-        print(player_name)
+        print(colors.BOLD_CYAN + player_name + colors.RESET)
         with client_lock:
             clients.append((player_name, client_socket))
         update_last_tcp_connection()  # Update the last TCP connection time
 
     except Exception as e:
-        print("Error handling client:", e)
+        print(colors.RED + "Error handling client:" + e + colors.RESET)
         client_socket.close()
         with client_lock:
             clients.remove((player_name, client_socket))
 
 
 def start_game():
-    global active_clients
     if not clients:
-        print("No clients connected")
+        print(colors.RED + "No clients connected" + colors.RESET)
         return
-    subject = None
-    questions = None
+
     subjects = [subject_1, subject_2, subject_3]
     questions_sets = [questions_1, questions_2, questions_3]
 
@@ -192,7 +190,6 @@ def start_game():
     active_clients = clients.copy()  # Initialize active clients as all clients
     for i, question in enumerate(questions):
         # Send the question to all clients
-        # if we removed a player that disconncted mid-game, we need to remove him also
         if indicator == 0:
             question_for_start = welcome_message + "\nTrue or false:" + question['question']
             send_question(active_clients, question_for_start)
@@ -202,12 +199,13 @@ def start_game():
 
         # Gather answers from all clients
         answers = collect_answers(active_clients)
-        print("finished collecting answers\n")
+        print(colors.BOLD_CYAN + "finished collecting answers\n" + colors.RESET)
 
         active_users = active_clients.copy()
         # Evaluate answers and prepare result message
-        results, active_clients = evaluate_answers(answers, question)  # Update active clients based on answers
-        print("finished evaluating answers\n")
+        results, active_clients = evaluate_answers(answers, question,
+                                                   active_clients)  # Update active clients based on answers
+        print(colors.BOLD_CYAN + "finished evaluating answers\n" + colors.RESET)
 
         # set the indicator to not add the welcome massage
         indicator = 1
@@ -220,114 +218,86 @@ def start_game():
             send_results(active_users, results)
             send_summary(clients, active_clients[0])
             break
-        elif len(active_clients) == 0 and not len(clients) == 0:
+        elif len(active_clients) == 0:
             active_clients = active_users
             send_results(active_clients, results)
             send_question(active_clients, next_question)
-        elif len(active_clients) == 0 and len(clients) == 0:
-            #no clients are connected
-            clean_Vars()
-            start_of_server()
         else:
             print("I'm here")
             print(len(active_clients))
             send_results(active_clients, results)
             send_question(active_clients, next_question)
     if len(active_clients) == 1:
-        clean_Vars()
+        clean_vars()
         start_of_server()
     else:
         send_summary_mult_winners(clients, active_clients)
 
 
-def send_results(Round_players, results):
-    for client, Player_Socket in Round_players:
+def send_results(clients, results):
+    for client, socket in clients:
         result_message = ''
         for r in results:
             result_message += r + '\n'
-        try:
-            length = len(result_message)
-            Player_Socket.sendall(length.to_bytes(4, byteorder='big'))
-            Player_Socket.sendall(result_message.encode('utf-8'))
-        except ConnectionResetError:
-            print("Client disconnected")
-            clients.remove((client, Player_Socket))  # Remove the client from the list
-            active_clients.remove((client, Player_Socket))
+        length = len(result_message)
+        socket.sendall(length.to_bytes(4, byteorder='big'))
+        socket.sendall(result_message.encode('utf-8'))
 
 
-def send_summary_mult_winners(All_The_Clients, winners):
+def send_summary_mult_winners(clients, winners):
     result_message = "Game over!\nCongratulations to the winners:"
     for client, _ in winners:
         result_message += client[0] + ","
     result_message = result_message[0:-1]
-    for client, Client_sock in All_The_Clients:
-        try:
-            length = len(result_message)
-            Client_sock.sendall(length.to_bytes(4, byteorder='big'))
-            Client_sock.sendall(result_message.encode('utf-8'))
-        except ConnectionResetError:
-            print("Client disconnected")
-            clients.remove((client, Client_sock))  # Remove the client from the list
-            active_clients.remove((client, Client_sock))
+    for client, socket in clients:
+        length = len(result_message)
+        socket.sendall(length.to_bytes(4, byteorder='big'))
+        socket.sendall(result_message.encode('utf-8'))
 
 
-def send_summary(All_The_Clients, winner):
-    for client, client_sock in All_The_Clients:
-        try:
-            result_message = "Game over!\nCongratulations to the winner:" + winner[0] + "\n"
-            length = len(result_message)
-            client_sock.sendall(length.to_bytes(4, byteorder='big'))
-            client_sock.sendall(result_message.encode('utf-8'))
-        except ConnectionResetError:
-            print("Client disconnected")
-            clients.remove((client, client_sock))  # Remove the client from the list
-            active_clients.remove((client, client_sock))
+def send_summary(clients, winner):
+    for client, socket in clients:
+        result_message = "Game over!\nCongratulations to the winner:" + winner[0] + "\n"
+        length = len(result_message)
+        socket.sendall(length.to_bytes(4, byteorder='big'))
+        socket.sendall(result_message.encode('utf-8'))
 
 
-def send_question(Players, question):
+def send_question(clients, question):
     question_message = f"{question}\n"
-    for client, player_socket in Players:
-        try:
-            length = len(question_message)
-            player_socket.sendall(length.to_bytes(4, byteorder='big'))
-            player_socket.sendall(question_message.encode('utf-8'))
-        except ConnectionResetError:
-            print("Client disconnected")
-            clients.remove((client, player_socket))  # Remove the client from the list
-            active_clients.remove((client, player_socket))
+    for _, socket in clients:
+        length = len(question_message)
+        socket.sendall(length.to_bytes(4, byteorder='big'))
+        socket.sendall(question_message.encode('utf-8'))
 
 
-def collect_answers(Players):
+def collect_answers(clients):
     answers = []
-    print("collecting answers\n")
+    print(colors.BOLD_CYAN + "collecting answers\n" + colors.RESET)
 
     # Prepare lists for select
-    read_sockets = [Player_Sock for _, Player_Sock in Players]
+    read_sockets = [socket for _, socket in clients]
     write_sockets = []
     error_sockets = []
 
     # Use select to get the list of sockets ready for reading
-    ready_to_read, _, error_sockets = select.select(read_sockets, write_sockets, error_sockets, 1)  # Timeout of 1 second
+    ready_to_read, _, _ = select.select(read_sockets, write_sockets, error_sockets, 1)  # Timeout of 1 second
 
-    for client_name, player_socket in Players:
-        if player_socket in ready_to_read:
+    for client_name, socket in clients:
+        if socket in ready_to_read:
             try:
-                answer = player_socket.recv(1).decode('utf-8')  # Receive only one character
-                answers.append(((client_name, player_socket), answer))  # Keep track of the full client tuple
+                answer = socket.recv(1).decode('utf-8')  # Receive only one character
+                answers.append(((client_name, socket), answer))  # Keep track of the full client tuple
             except Exception as e:
-                print(f"An error occurred: {e}\n")
-                clients.remove((client_name, player_socket))  # Remove the client from the list
-                active_clients.remove((client_name, player_socket))
-        elif player_socket in error_sockets:
-            print("player: " + client_name + " Disconnected in the middle of the game!\n")
+                print(colors.RED + f"An error occurred: {e}" + colors.RESET)
         else:
-            print(f"No answer received from {client_name}")
-            answers.append(((client_name, player_socket), None))  # Append None if no answer received
+            print(colors.RED + f"No answer received from {client_name}" + colors.RESET)
+            answers.append(((client_name, socket), None))  # Append None if no answer received
 
     return answers
 
 
-def evaluate_answers(answers, question):
+def evaluate_answers(answers, question, active_clients):
     results = []
     print("evaluating answers\n")
     for i, (client, answer) in enumerate(answers):
@@ -349,11 +319,11 @@ def main():
         get_server_ip()
         print(broadcast_address)
         # Get server name from user input
-        server_name = input("Enter server name: ")
+        server_name = input(colors.BOLD_CYAN + "Enter server name: " + colors.RESET)
         start_of_server()
 
     except Exception as e:
-        print("Error in server:", e)
+        print(colors.RED + "Error in server:" + e + colors.RESET)
 
 
 def start_of_server():
@@ -372,11 +342,11 @@ def start_of_server():
 
     # Start UDP broadcast thread after TCP port assignment
     update_last_tcp_connection()
-    udp_thread = threading.Thread(target=udp_broadcast)
+    udp_thread = threading.Thread(target=udp_broadcast, args=(server_name,))
     udp_thread.daemon = True
     udp_thread.start()
 
-    print("Server started, listening on IP address", server_address)
+    print(colors.GREEN + "Server started, listening on IP address" + server_address + colors.RESET)
 
     # Accept incoming connections and handle clients
     while True:
@@ -385,15 +355,11 @@ def start_of_server():
         client_thread.start()
 
 
-def clean_Vars():
+def clean_vars():
     global clients
-    global active_clients
-    for client, Clean_The_Sock in clients:
-        Clean_The_Sock.close()
-    for client, Clean_The_Sock in active_clients:
-        Clean_The_Sock.close()
+    for client, socket in clients:
+        socket.close()
     clients = []
-    active_clients = []
 
 
 # Entry point
