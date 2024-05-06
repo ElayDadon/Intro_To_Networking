@@ -17,26 +17,23 @@ class TriviaClient:
     TIME_TO_SEND_ANS = 10  # Time allowed for sending an answer
     END_GAME_MSG = "Game over!"  # Message prefix indicating the end of the game
     # Message contained in the last summary message that indicates that it's the last summary (the game is over)
-    END_GAME_SUMMARY = "Wins!"
+    END_GAME_SUMMARY = "Win"
     KEYS = ['N', 'F', '0', 'Y', 'T', '1']
 
     # Function to wait for a game offer from the server
     def wait_for_offer(self, udp_socket: socket.socket) -> Tuple[str, str, int]:
-        # Bind the UDP socket to a specific address and port
-        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        udp_socket.bind(("", self.BROADCAST_PORT))
         # Wait for the offer to the game and unpack it when received
         data, server_addr = udp_socket.recvfrom(self.UDP_PACKET_LEN)
         try:
             (magic_cookie, msg_type, server_name, server_port) = struct.unpack('!4sB32sH', data)
         except struct.error:
-            raise InvalidOffer("Invalid UDP packet structure")
+            raise InvalidOffer(colors.RED + "Invalid UDP packet structure" + colors.RESET)
         # Check the magic cookie
         if magic_cookie != self.MAGIC_COOKIE:
-            raise InvalidOffer("Invalid magic cookie")
+            raise InvalidOffer(colors.RED + "Invalid magic cookie" + colors.RESET)
         # Check the message type
         if msg_type != self.OFFER_MSG_TYPE:
-            raise InvalidOffer("Invalid message type (not offer)")
+            raise InvalidOffer(colors.RED + "Invalid message type (not offer)" + colors.RESET)
 
         return server_name.decode().rstrip(), server_addr[0], server_port
 
@@ -61,7 +58,8 @@ class TriviaClient:
             msg_len = self.tcp_socket.recv(self.MSG_LEN_HEADER)
             # Receive the message based on the received length
             msg = self.tcp_socket.recv(int.from_bytes(msg_len, byteorder='big'))
-            print(colors.Bold_Blue + msg.decode() + colors.RESET)
+            msg = msg.decode()
+            print(colors.Bold_Blue + msg + colors.RESET)
             # Check if the game is over
             if msg[:len(self.END_GAME_MSG)] != self.END_GAME_MSG:
                 # If not, process player answer
@@ -90,7 +88,7 @@ class TriviaClient:
         key = input(colors.BOLD_CYAN + "Please enter your answer:" + colors.RESET)
         # Validate the answer
         while not self.is_valid_key(key) and not stop_flag.is_set():
-            print("Invalid answer")
+            print(colors.RED + "Invalid answer" + colors.RESET)
             key = input(colors.BOLD_CYAN + "Please enter your answer:" + colors.RESET)
         if not stop_flag.is_set():
             # If the stop flag is not set (the timeout didn't happen), send the answer to the server
@@ -111,11 +109,15 @@ class TriviaClient:
     # Function to start the trivia client loop
     def start(self) -> None:
         # Get player name
-        player_name = input("please enter your name:")
-        print("Client started, listening for offer requests...")
+        player_name = input(colors.BOLD_CYAN + "please enter your name:" + colors.RESET)
+        print(colors.GREEN + "Client started, listening for offer requests..." + colors.RESET)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
+            # Bind the UDP socket to a specific address and port
+            udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            udp_socket.bind(("", self.BROADCAST_PORT))
             while True:
                 try:
+                    print(colors.BOLD_CYAN + "Before waiting for offer" + colors.RESET)
                     # Wait for a game offer
                     server_name, server_ip, server_tcp_port = self.wait_for_offer(udp_socket)
                     print(colors.GREEN + f"Received offer from server {server_name} at address {server_ip}, attempting to connect..." + colors.RESET)
@@ -142,8 +144,6 @@ class TriviaClient:
 
     def __init__(self):
         self.tcp_socket = None
-
-
 
 
 class InvalidOffer(Exception):
