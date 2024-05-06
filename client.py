@@ -88,7 +88,7 @@ class TriviaClient:
         key = input(colors.BOLD_CYAN + "Please enter your answer:" + colors.RESET)
         # Validate the answer
         while not self.is_valid_key(key) and not stop_flag.is_set():
-            print("Invalid answer")
+            print(colors.RED + "Invalid answer" + colors.RESET)
             key = input(colors.BOLD_CYAN + "Please enter your answer:" + colors.RESET)
         if not stop_flag.is_set():
             # If the stop flag is not set (the timeout didn't happen), send the answer to the server
@@ -144,8 +144,6 @@ class TriviaClient:
 
     def __init__(self):
         self.tcp_socket = None
-
-
 
 
 class InvalidOffer(Exception):
