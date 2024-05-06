@@ -198,7 +198,7 @@ def start_game():
         else:
             print("I'm here")
             print(len(active_clients))
-            send_results(active_clients, results)
+            send_results(active_users, results)
             send_question(active_clients, next_question)
     if len(active_clients) == 1:
         clean_Vars()
