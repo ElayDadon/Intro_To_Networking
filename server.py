@@ -106,9 +106,9 @@ def start_game():
         return
     subject = None
     questions = None
-    subjects = [Subjects.subject_1, Subjects.subject_2, Subjects.subject_3, Subjects.subject_4, Subjects.subject_5,
+    subjects = [Subjects.subject_0, Subjects.subject_1, Subjects.subject_2, Subjects.subject_3, Subjects.subject_4, Subjects.subject_5,
                 Subjects.subject_6, Subjects.subject_7]
-    questions_sets = [Subjects.questions_1, Subjects.questions_2, Subjects.questions_3, Subjects.questions_4,
+    questions_sets = [Subjects.subject_0, Subjects.questions_1, Subjects.questions_2, Subjects.questions_3, Subjects.questions_4,
                      Subjects.questions_5, Subjects.questions_6, Subjects.questions_7]
 
     if subjects:

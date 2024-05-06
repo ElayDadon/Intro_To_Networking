@@ -8,6 +8,19 @@ class Colors:
 
 
 class Subjects:
+    subject_0 = "Friends TV Show Trivia"
+    questions_0 = [
+        {"question": "Ross's second wife's name is Emily", "is_true": True},
+        {"question": "Joey's stuffed penguin is named Hugsy", "is_true": True},
+        {"question": "Ross and Monica's dog is named Chi-Chi", "is_true": False},
+        {"question": "The character known for saying 'How you doin'?' is Chandler", "is_true": False},
+        {"question": "The coffee shop where the friends hang out is named Central Perk", "is_true": True},
+        {"question": "Chandler's roommate before Joey was named Kip", "is_true": True},
+        {"question": "Ross's son's name is Ben", "is_true": True},
+        {"question": "The character who famously says 'We were on a break!' is Rachel", "is_true": False},
+        {"question": "Phoebe's twin sister's name is Ursula", "is_true": True}
+    ]
+
     subject_1 = "production of coffee mugs in China"
     questions_1 = [
         {"question": "China is the largest producer of coffee mugs in the world", "is_true": True},
